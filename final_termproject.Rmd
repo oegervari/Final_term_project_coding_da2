@@ -22,12 +22,13 @@ library(modelsummary)
 library(ggpubr)
 # Extra for correlation heatmap
 library(reshape2)
-#library(kableExtra)
+library(kableExtra)
 
 # Get the data
 # data("MASchools")
 # df <- MASchools
 # rm( MASchools )
+
 
 ```
 
@@ -48,45 +49,62 @@ ECT.
 
 ```{r, echo=FALSE}
 # Sample selection
-df <- df1 %>% select( division , bouts, start, 
-                     nationality, stance, height, reach,
+df <- df1 %>% select( name, division , bouts, start, age,
+                     nationality, stance, height,
                      rank, points, win, lose, draw,
-                     years_active, weight_limit) %>% drop_na()
+                     years_active, mean_height) %>% drop_na()
+df3 <- df1 %>% select(name, alias)
+df <- merge(df,df3, by = 'name')
+rm(df3)
 
-df$reach2height_ratio <- round(df$reach / df$height, 2) # adding reach2height ratio
+df$height2mean_height_r <- round(df$height / df$mean_height, 2) *100 # adding height2class r
+#df$reach2height_ratio <- round(df$reach / df$height, 2) # adding reach2height ratio
+df$alias <-  ifelse(is.na(df$alias), 0, 1)  # adding alias dummy variable
+df$starting_age <- df$age - df$years_active
 
 P95 <- function(x){quantile(x,0.95,na.rm=T)}
 P05 <- function(x){quantile(x,0.05,na.rm=T)}
-datasummary( (  bouts + start + height + reach
-                + points + years_active) ~
+datasummary( (`Rank on BoxRec.com` = rank ) + 
+             (`Points on BoxRec.com` = points) +
+             (`Age` = age ) + 
+             (`Number of professional bouts` = bouts ) + 
+             (`Years spent as a professional boxer` = years_active) +
+             (`Age of becoming a professional boxer` = starting_age) + 
+             (`Height to average height per division ratio (%)` = height2mean_height_r) ~
              Mean + Median + SD + Min + Max + P05 + P95 , 
              data = df ,
-             title = 'Descriptive statistics') #%>% 
-      #kable_styling(latex_options = c("HOLD_position","scale_down"))
+             title = 'Descriptive statistics') %>% 
+      kable_styling(latex_options = c("HOLD_position","scale_down"))
 ```
 
-The number of observations is `r sum(!is.na(df$score4))` for all of our key variables.
+The number of observations is `r sum(!is.na(df$bouts))` for all of our key variables.
 
 DESCRIPTION OF THE SUMMARY STATS: WHAT CAN WE LEARN FROM THEM?
 
 As the focus is the price difference, the next Figure shows the histogram for this variable.
 
 ```{r, echo=FALSE, warning=FALSE, fig.width=8, fig.height = 3, fig.align="center" }
-# score 4
-p1 <- ggplot( df , aes(x = score4)) +
-  geom_histogram( binwidth = 5, fill='navyblue', color = 'white' ) +
-  labs(y = 'Count',x = "Averaged values of test scores for schools") +
+# Boxrec points
+p1 <- ggplot( df , aes(x = points)) +
+  geom_histogram( binwidth = 10, fill='navyblue', color = 'white' ) +
+  labs(y = 'Count',x = "Points on BoxRec.com") +
   theme_bw()
 
-# stratio
-p2 <- ggplot( df , aes(x = stratio)) +
-  geom_histogram(binwidth = 0.5,fill='navyblue', color = 'white' ) +
-  labs(y = 'Count',x = "Student to teacher ratio") +
+# Years as a pro
+p2 <- ggplot( df , aes(x = years_active)) +
+  geom_histogram(binwidth = 1,fill='navyblue', color = 'white' ) +
+  labs(y = 'Count',x = "Years spent as a Professional Boxer") +
   theme_bw()
 
-association_figs <- ggarrange(p1, p2,
+# Log boxrec points
+p3 <- ggplot( df , aes(x = log(points))) +
+  geom_histogram(binwidth = 0.3, fill='navyblue', color = 'white' ) +
+  labs(y = 'Count',x = "Log points on BoxRec.com") +
+  theme_bw()
+
+association_figs <- ggarrange(p1, p3, p2,
                        hjust = -0.6,
-                       ncol = 2, nrow = 1)
+                       ncol = 3, nrow = 1)
 association_figs
 
 ```
@@ -98,16 +116,10 @@ DESCRIPTION OF THE FIGURE. WHAT DOES IT TELS US?
 The key pattern of association is:
 
 ```{r, echo=FALSE, warning=FALSE, fig.width=4, fig.height = 3, fig.align="center" }
-chck_sp <- function( x_var , x_lab ){
-  ggplot( df , aes(x = x_var, y = score4)) +
-    geom_point(color='red',size=2,alpha=0.6) +
-    geom_smooth(method="loess" , formula = y ~ x )+
-    labs(x = x_lab, y = "Averaged values of test scores") +
-    theme_bw()
-}
-
-# Our main interest: student-to-teacher ratio:
-chck_sp(df$stratio,'Student-to-teacher ratio')
+ggplot( df , aes(x = years_active, y = log(points))) +
+  geom_point(color='red',size=2,alpha=0.6) +
+  geom_smooth(method="loess" , formula = y ~ x )+
+  theme_bw()
 
 ```
 
