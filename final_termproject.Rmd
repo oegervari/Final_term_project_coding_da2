@@ -162,20 +162,21 @@ reg3 <- feols( log(points) ~ lspline(bouts, 25) + alias,
                data = df , vcov = 'hetero' )
 
 ##
-# reg4: reg3 + win with knots at 20 and 50 + height/mean height per division ratio)
-reg4 <- feols( log(points) ~ lspline(bouts, 25) + alias +
-               lspline(win, c(20,50)) +
+# reg4: reg3 + lose + height/mean height per division ratio)
+reg4 <- feols( log(points) ~ lspline(bouts, 25) 
+                   + alias 
+                   + lose
                    + height2mean_height_r , data = df , vcov = 'hetero' )
 
 #
 # reg5: reg4 + age + start + lose + starting age
-reg5 <- feols( log(points) ~  alias 
-               + height2mean_height_r 
-               + lspline(bouts, 25) 
-               + lspline(age, c(27, 31))
+reg5 <- feols( log(points) ~ lspline(bouts, 25) 
+               + height2mean_height_r
+               + lose 
+               + lspline(age, c(27, 31)) 
                + starting_age
-               + lose
-               + lspline(start, 2015)
+               + alias
+               + lspline(years_active, 5)
                , data = df , vcov = 'hetero' )
 
 # Naming the coefficients for pretty output
@@ -186,18 +187,18 @@ b2 <- round( reg5$coeftable[3,1] , 2 )
 
 My preferred model is:
 
-score = $`r alpha`$ $`r b1`$ $( student/teacher < 18)$ $`r b2`$ $( student/teacher \geq 18) + \delta Z$
+log(points) = $`r alpha`$ $`r b1`$ $( bouts < 25)$ $`r b2`$ $( bouts \geq 25) + \delta Z$
 
-where $Z$ are standing for the controls, which includes controlling for english language, lunch, other special characteristics and wealth measures. From this model we can infer:
+where $Z$ are standing for the controls, which includes controlling for height to mean height per division, number of losses, current age, starting age, whether the boxer has an alias on BoxRec.com and active years. From this model we can infer:
 
-- when every covariates are zero, students expected to have grade score of $`r alpha`$
-- when the student to teacher is one unit larger, but below the value of 18, we see students to have on average $`r abs(b1)`$ smaller grades.
-- when the student to teacher is one unit larger, with the value above or equal to 18, we see students to have on average $`r abs(b2)`$ smaller grades.
+- In case of log-level regression, the intercept is practically meaningless (when the boxer had 0 professional bouts, he would be expected to have a point of $`r alpha`$)
+- when the number of bouts is one unit larger, but below the value of 25, we see boxers to have on average $`r abs(b1)*100`$ % more points
+- when the number of bouts is one unit larger, with the value above or equal to 25, boxers to have on average $`r abs(b2)*100`$ % more points.
 
-However, based on the heteroskedastic robust standard errors, these results are statistically non different from zero. To show that, I have run a two-sided hypothesis test:
+Based on the heteroskedastic robust standard errors, these results are statistically different from zero. To show that, I have run a two-sided hypothesis test:
 $$H_0:=\beta_1 = 0$$
 $$H_A:=\beta_1 \neq 0$$
-I have the t-statistic as `r round( reg5$coeftable[2,3] , 2 )` and the p-value as `r round( reg5$coeftable[2,4] , 2 )`, which confirms my conclusion.
+I have the t-statistic as `r round( reg5$coeftable[2,3] , 2 )` and the p-value as `r round( reg5$coeftable[2,4] , 2 )` for when the number of bouts is less than 25, and  `r round( reg5$coeftable[3,3] , 2 )` and the p-value as `r round( reg5$coeftable[3,4] , 2 )` for when the number of bouts is more than 25, which confirms my conclusion.
 
 We compare multiple models to learn about the stability of the parameters. Bla-bla:
 
@@ -205,22 +206,23 @@ We compare multiple models to learn about the stability of the parameters. Bla-b
 ##
 # Summarize our findings:
 varname_report <- c("(Intercept)" = "Intercept",
-                   "stratio" = "student/teacher",
-                   "lspline(stratio,18)1" = "student/teacher (<18)",
-                   "lspline(stratio,18)2" = "student/teacher (>=18)",
-                   "english_d" = "english_dummy")
-groupConf <- list("English" = c("english"),
-                  "Lunch" = c("lunch"),
-              "Other Special" = c("special"),
-              "Wealth Measures" = c("exptot","income","scratio"))
-vars_omit <- c("english|lunch|special|salary|exptot|income|scratio")
+                   "bouts" = "bouts",
+                   "lspline(bouts,25)1" = "bouts (<25)",
+                   "lspline(bouts,25)2" = "bouts (>=25)",
+                   "height2mean_height_r" = "height to division mean height ratio",
+                  "lspline(years_active,5)1" = "years active (<5)",
+                   "alias" = "alias_dummy")
+groupConf <- list("Losses" = c("lose"),
+                  "Age" = c("lspline(age,c(27,31))1", "lspline(age,c(27,31))2", "lspline(age,c(27,31))3",
+                            "lspline(years_active,5)1"))
+vars_omit <- c("age|losses")
 
 # Note: coefstat = 'confint' is just an example, usually you need to report se.
 style_noHeaders = style.tex(var.title = "", fixef.title = "", stats.title = " ")
 
 
 kable( etable( reg1 , reg2 , reg3 , reg4 , reg5 ,
-        title = 'Average test scores for 4th graders',
+        title = 'Log(points) of Boxers ',
         dict = varname_report,
         drop = vars_omit ,
         group = groupConf ,
@@ -231,7 +233,7 @@ kable( etable( reg1 , reg2 , reg3 , reg4 , reg5 ,
         depvar = F ) , 
         col.names = c('(1)','(2)','(3)','(4)','(5)'),
        "latex", booktabs = TRUE,  position = "H",
-       caption = 'Models to uncover relation between test score and student to teacher ratio') %>% kable_styling(latex_options = c("hold_position","scale_down"))
+       caption = 'Models to uncover relation between log points and the number of professional bouts') %>% kable_styling(latex_options = c("hold_position","scale_down"))
 
 
 ```
