@@ -1,5 +1,7 @@
 ---
-title: "Example for knitting pdf with models"
+title: "Data Analytics 2 - Coding 1 term project: Analysing BoxRec.com"
+author: "Oszkar Egervari"
+date: "`r format(Sys.time(), '%d %B %Y')`"
 output: 
   pdf_document:
     extra_dependencies: ["float"]
@@ -30,17 +32,18 @@ df1 <- read_csv("https://raw.githubusercontent.com/oegervari/Final_term_project_
 
 ## Introduction
 
-This is a causal analysis on fourth graders in Massachusetts public schools in the spring of 1998. We investigating the effect of student per teacher ratio on the test results of the fourth graders. ECT.
+This is an analysis of active professional boxers' performance. The data for the analysis is scraped from [BoxRec.com]("https://boxrec.com/en/ratings").
 
-HERE COMES THE MOTIVATION WHY THIS IS A MEANINGFUL PROJECT AND WHAT IS THE MAIN GOAL!
+In the following pages I examine the connection between the current points held by each athlete and other variables listed by BoxRec. 
+
+My main goal for this project is to show whether these relationships exist (if they are statistically significant from zero) and how well they explain the the variations in the dependent variable, which is the current points of boxers.
 
 
 ## Data
 
-The Massachusetts data are ...
-Further information is available (here)[<https://www.rdocumentation.org/packages/AER/versions/1.2-9/topics/MASchools>].
+The data I used for the analysis is available on my [github]("https://raw.githubusercontent.com/oegervari/Final_term_project_coding_da2/main/clean_data/clean_data.csv") and the raw data can be found [here]("https://github.com/oegervari/Final_term_project_coding_da2/blob/main/raw%20data/boxrec_raw.csv").
 
-ECT.
+Before deciding on the right hand side variables, let's take a glance at the descriptive statistics of the major variables of the dataset in table 1:
 
 
 ```{r, echo=FALSE}
@@ -75,9 +78,13 @@ datasummary( (`Rank on BoxRec.com` = rank ) +
 
 The number of observations is `r sum(!is.na(df$bouts))` for all of our key variables.
 
-DESCRIPTION OF THE SUMMARY STATS: WHAT CAN WE LEARN FROM THEM?
+We can see, that the ranks are fairly normally distributed, they are a little skewed to the right, which is understandable, because we can expect more athletes ranking the same as we are going down on the leaderboard.
 
-As the focus is the price difference, the next Figure shows the histogram for this variable.
+However the points have a massive long right tail, the highest being `r max(df$points)`, meanwhile the median is merely `r median(df$points)`. Based on this, it's safe to say that it's probably better to use the log of the points, instead of their normal value, but let's take a look at some plots in the next section.
+
+I calculated a new variable, the registered height and the mean height per division. Barring the heavy weight division, where there is no weight limit, so being taller seems almost always more advantageous, I'm not sure if height is an advantage or not. Because shorter athletes can put on more weight, given that everyone in a division has to fit in the same weight limit, meanwhile taller athletes have (in most cases) the benefit of extra reach. Thus I thought this is an interesting question to figure out.
+
+As the focus is the points achieved, the next Figure shows the histogram for this variable.
 
 ```{r, echo=FALSE, warning=FALSE, fig.width=8, fig.height = 3, fig.align="center" }
 # Boxrec points
@@ -98,29 +105,38 @@ p3 <- ggplot( df , aes(x = log(points))) +
   labs(y = 'Count',x = "Log points on BoxRec.com") +
   theme_bw()
 
-association_figs <- ggarrange(p1, p3, p2,
+p4 <- ggplot( df , aes(x = bouts)) +
+  geom_histogram(binwidth = 5, fill='navyblue', color = 'white' ) +
+  labs(y = 'Count',x = "Number of professional bouts") +
+  theme_bw()
+
+
+association_figs <- ggarrange(p1, p3, p2, p4,
                        hjust = -0.6,
-                       ncol = 3, nrow = 1)
+                       ncol = 2, nrow = 2)
 association_figs
 
 ```
+The plots confirm my theory, that the points have a log distribution, as we can see on the log points graph. The 'years spent as a professional boxer' and the number of professional bouts graphs look pretty similar, which is not surprising. At the end I decided to choose the number of bouts as the explanatory variable, because it's coefficients were significant on all levels with one piecewise linear spline knot, meanwhile the years spent variable needed two knots in my opinion, and was not significant (on a 95% significance level) for all splines (details can be found in appendix).
 
-DESCRIPTION OF THE FIGURE. WHAT DOES IT TELS US?
-
-(May change the order of descriptive stats and graph.)
+Also based on the graph, it would make sense trying to use the log of the number of professional bouts. I ended up not going this route, because the log-log regression of points-bouts provided an inferior model to the log-level regression with splines (for details please see appendix).
 
 The key pattern of association is:
 
 ```{r, echo=FALSE, warning=FALSE, fig.width=4, fig.height = 3, fig.align="center" }
-ggplot( df , aes(x = years_active, y = log(points))) +
+ggplot( df , aes(x = bouts, y = log(points))) +
   geom_point(color='red',size=2,alpha=0.6) +
   geom_smooth(method="loess" , formula = y ~ x )+
+  labs(x = "Number of bouts as a professional boxer", y = "Log(points) held by a boxer")+
   theme_bw()
 
 ```
-Heatmap
+This is a scatterplot displaying the log(points) per number of bouts. The lowess non-parametric regression shows us where to have our knot, if we want to use piecewise linear splines.
 
-```{r, echo=FALSE, warning=FALSE, fig.width=6, fig.height = 5, fig.align="center" }
+
+# Heatmap
+
+```{r, echo=FALSE, warning=FALSE, fig.width=6, fig.height = 4, fig.align="center" }
 numeric_df <- keep( df , is.numeric )
 cT <- round( cor( numeric_df , use = "complete.obs") , 2 )
 # create a lower triangular matrix
@@ -141,15 +157,18 @@ ggplot( data = melted_cormat, aes( Var2 , Var1 , fill = value ) )+
 
 
 ```
+The heatmap displays the correlation between all numeric variables in the dataset.
+For example we can see, that the 'start' and 'years active' variables are strongly correlated negatively, which means complete sense, since the earlier (the smaller) the start of a current professional career, the more the active years. We can also confirm, that the number of bouts and active years are positively correlated, the exact value is `r cT[10,1]`.
 
-How will you include this in your model?
-
-Short description on the other variables: 2-10 sentence depends on the amount of variables you have. You should reference your decisions on the graphs/analysis which are located in the appendix.
+Based on the correlations of the numeric variables, I will use alias, lose, height2mean_height_r, age, starting_age and years_active as control variables.
+Alias is a binary variable and it takes a value of 1 when an athlete has an alias listed on BoxRec (`r sum(df$alias)` has an alias out of `r sum(!is.na(df$bouts))`).
+Lose is the number of losses, I have already talked about the height2mean_height_r,
+starting_age is the age of athletes turning professional, while years_active is the years of being a professional boxer.
 
 ## Model
 
 
-```{r, echo = FALSE }
+```{r message=F, echo = FALSE}
 
 # reg1: NO control, simple linear regression
 reg1 <- feols( log(points) ~ bouts, data = df , vcov = 'hetero')
@@ -187,20 +206,20 @@ b2 <- round( reg5$coeftable[3,1] , 2 )
 
 My preferred model is:
 
-log(points) = $`r alpha`$ $`r b1`$ $( bouts < 25)$ $`r b2`$ $( bouts \geq 25) + \delta Z$
+log(points) = $`r alpha`$ $+ `r b1`$ $( bouts < 25)$ $+ `r b2`$ $( bouts \geq 25) + \delta Z$
 
-where $Z$ are standing for the controls, which includes controlling for height to mean height per division, number of losses, current age, starting age, whether the boxer has an alias on BoxRec.com and active years. From this model we can infer:
+where $Z$ is standing for the controls, which includes controlling for height to mean height per division, number of losses, current age, starting age, whether the boxer has an alias on BoxRec.com and active years. From this model we can infer:
 
-- In case of log-level regression, the intercept is practically meaningless (when the boxer had 0 professional bouts, he would be expected to have a point of $`r alpha`$)
-- when the number of bouts is one unit larger, but below the value of 25, we see boxers to have on average $`r abs(b1)*100`$ % more points
-- when the number of bouts is one unit larger, with the value above or equal to 25, boxers to have on average $`r abs(b2)*100`$ % more points.
+- In case of log-level regression, the intercept is practically meaningless (in this case it means the average log points in case of a fighter having 0 bouts)
+- when the number of bouts is one unit larger, but below the value of 25, we expect boxers to have $`r abs(b1)*100`$ % more points on average
+- when the number of bouts is one unit larger, with the value above or equal to 25, we expect boxers to have $`r abs(b2)*100`$ % more points on average.
 
 Based on the heteroskedastic robust standard errors, these results are statistically different from zero. To show that, I have run a two-sided hypothesis test:
 $$H_0:=\beta_1 = 0$$
 $$H_A:=\beta_1 \neq 0$$
-I have the t-statistic as `r round( reg5$coeftable[2,3] , 2 )` and the p-value as `r round( reg5$coeftable[2,4] , 2 )` for when the number of bouts is less than 25, and  `r round( reg5$coeftable[3,3] , 2 )` and the p-value as `r round( reg5$coeftable[3,4] , 2 )` for when the number of bouts is more than 25, which confirms my conclusion.
+I have the t-statistic as `r round( reg5$coeftable[2,3] , 2 )` and the p-value is basically `r round( reg5$coeftable[2,4] , 2 )` for when the number of bouts is less than 25, and  the t-statistic as `r round( reg5$coeftable[3,3] , 2 )` and the p-value is again basically `r round( reg5$coeftable[3,4] , 2 )` for when the number of bouts is more than 25, which confirms my conclusion.
 
-We compare multiple models to learn about the stability of the parameters. Bla-bla:
+We compare multiple models to learn about the stability of the parameters.
 
 ```{r, echo = FALSE }
 ##
@@ -210,12 +229,10 @@ varname_report <- c("(Intercept)" = "Intercept",
                    "lspline(bouts,25)1" = "bouts (<25)",
                    "lspline(bouts,25)2" = "bouts (>=25)",
                    "height2mean_height_r" = "height to division mean height ratio",
-                  "lspline(years_active,5)1" = "years active (<5)",
-                   "alias" = "alias_dummy")
-groupConf <- list("Losses" = c("lose"),
-                  "Age" = c("lspline(age,c(27,31))1", "lspline(age,c(27,31))2", "lspline(age,c(27,31))3",
-                            "lspline(years_active,5)1"))
-vars_omit <- c("age|losses")
+                   "alias" = "alias_dummy",
+                    "lose" = "Losses")
+groupConf <- list("Age" = c("age", "years_active"))
+vars_omit <- c("lose|age|years")
 
 # Note: coefstat = 'confint' is just an example, usually you need to report se.
 style_noHeaders = style.tex(var.title = "", fixef.title = "", stats.title = " ")
@@ -232,26 +249,75 @@ kable( etable( reg1 , reg2 , reg3 , reg4 , reg5 ,
         se.row = F,
         depvar = F ) , 
         col.names = c('(1)','(2)','(3)','(4)','(5)'),
-       "latex", booktabs = TRUE,  position = "H",
+       "latex", booktabs = TRUE, 
        caption = 'Models to uncover relation between log points and the number of professional bouts') %>% kable_styling(latex_options = c("hold_position","scale_down"))
 
 
 ```
 
 
+The first table shows us, that both the intercept and the $\beta$ are significant on a high level (significance code means p-value is between 0 and 0.001). 
 
+The second table, I added a spline (at 25 bouts). The coefficients are significant on the same level as with the first table.
 
+On the third table I added the alias binary variable as a control. The coefficient of the alias variable, just as the other two are significant again on the same level. 
+On a side note, it looks like a boxer having an alias, we can expect his points to be 44% higher on average. We'll see if that holds up with more variables in the mix.
 
-## Robustness check / 'Heterogeneity analysis'
+On the fourth table I added another two control variables, the number of losses and the height to mean height per division. Both of them are significant with p values between 0 and 0.001. Interpreting the coefficients, with every other variable unchanged, we can expect a boxer with 1 additional loss to have on average 19% lower score. Finally we can see if there is indeed a relationship between the height to mean height per division relationship and points. The coefficient is 0.11, which means, that if the explanatory variable takes on a higher value by one unit, the expected value of points is 11% higher. In this case, the height ratio is a percentage (height/meanheight * 100), so if this ratio is 1% higher, we can expect the points to be 11% higher. 
+Also the alias binary variable is not significant in this table, so most likely the two new variables explain the relationship of alias and log(points). 
 
-Task: calculate and report t-tests for each countries. 
+On the final table I added the age variable with two splines, the starting year and the years active with two splines. Even though these new variables seem like they are highly correlated, they are all significant with a p-value between 0 and 0.001 (the second spline of years_active was omitted because of collinearity). The summary table of this table can be found in the appendix.
 
+```{r, echo=FALSE}
+df_nat <- df %>% group_by(nationality) %>% summarise(n())
+names(df_nat) <- c('country', 'count')
+
+```
 
 
 ## Conclusion
 
-HERE COMES WHAT WE HAVE LEARNED AND WHAT WOULD STRENGHTEN AND WEAKEN OUR ANALYSIS.
+Having done the analysis, we can conclude, that other than the alias binary variable, whose coefficient turned out to be not significant after involving other variables, every variable improved the previous models. We can see that by checking the $R^2$ value, which finally ended up being `r round( r2(reg5)[2] , 3 )`.
 
+The analysis could be strengthened if the data was better. Unfortunately there are a lot of missing values for all types of variables throughout the dataset. I really wanted to use the reach (wingspan) variable, but there were just too many of it missing (only `r sum(!is.na(df1$reach))` out of almost 10000 observations).
+I ended up not using the nationality as an explanatory variable, because on top of having `r length((unique(df$nationality)))` unique values, a lot of the country coefficients are not significant, which is expected, because there are `r count(df_nat[which(df_nat[,2]<2),])` countries with only one observation.
+
+Another thing, that would help the analysis are variables, that are more correlated to professional ranking. I'm not familiar with the advanced boxing statistics, but I'm sure, there are measures that would help, like area covered in a bout, hits received, hits given or even amateur results.
+
+\newpage
 ## Appendix
 
-Here comes all the results which are referenced and not essential for understanding the MAIN results.
+```{r, echo=FALSE, warning=FALSE, fig.width=4, fig.height = 3, fig.align="center" }
+reg_years <- feols( log(points) ~ lspline(years_active, c(5)), data = df , vcov = 'hetero')
+reg_bouts <- feols( log(points) ~ lspline(bouts, 25), data = df , vcov = 'hetero')
+reg_logbouts <- feols( log(points) ~ log(bouts), data = df , vcov = 'hetero')
+
+kable( etable(reg_years, reg_bouts,
+              coefstat = 'se',
+              fitstat = c('n','r2'),
+              se.row = F,
+              depvar = F ),
+       col.names = c('Years spent in pro boxing','Number of bouts'),
+       "latex", booktabs = TRUE,
+       caption = 'Comparing log(points) - number of bouts and log(points) - active years regressions') %>% kable_styling(latex_options = c("hold_position","scale_down"))
+
+kable( etable(reg_logbouts, reg_bouts,
+              coefstat = 'se',
+              fitstat = c('n','r2'),
+              se.row = F,
+              depvar = F ),
+       col.names = c('Log number of boutse','Number of bouts'),
+       "latex", booktabs = TRUE,
+       caption = 'Comparing log(points) - log number of bouts and log(points) - number of bouts regressions') %>% kable_styling(latex_options = c("hold_position","scale_down"))
+
+#reg5
+kable( etable(reg5,
+              coefstat = 'se',
+              fitstat = c('n','r2'),
+              se.row = F,
+              depvar = F ),
+       col.names = c('(5)'),
+       "latex", booktabs = TRUE,
+       caption = 'Regression table 5') %>% kable_styling(latex_options = c("hold_position","scale_down"))
+
+```
