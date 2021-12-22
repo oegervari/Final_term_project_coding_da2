@@ -24,11 +24,7 @@ library(ggpubr)
 library(reshape2)
 library(kableExtra)
 
-# Get the data
-# data("MASchools")
-# df <- MASchools
-# rm( MASchools )
-
+df1 <- read_csv("https://raw.githubusercontent.com/oegervari/Final_term_project_coding_da2/main/cleandf10000.csv")
 
 ```
 
@@ -122,6 +118,29 @@ ggplot( df , aes(x = years_active, y = log(points))) +
   theme_bw()
 
 ```
+Heatmap
+
+```{r, echo=FALSE, warning=FALSE, fig.width=6, fig.height = 5, fig.align="center" }
+numeric_df <- keep( df , is.numeric )
+cT <- round( cor( numeric_df , use = "complete.obs") , 2 )
+# create a lower triangular matrix
+cT[ upper.tri( cT ) ] <- NA
+# Put it into a tibble format
+melted_cormat <- melt( cT , na.rm = TRUE)
+# Now we can create a heat-map
+ggplot( data = melted_cormat, aes( Var2 , Var1 , fill = value ) )+
+  geom_tile( color = "white" ) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Correlation") +
+  theme_bw()+ 
+  theme( axis.text.x = element_text(angle = 45, vjust = 1, 
+                                    size = 10, hjust = 1))+
+  labs(y="",x="")+
+  coord_fixed()
+
+
+```
 
 How will you include this in your model?
 
@@ -133,27 +152,31 @@ Short description on the other variables: 2-10 sentence depends on the amount of
 ```{r, echo = FALSE }
 
 # reg1: NO control, simple linear regression
-reg1 <- feols( score4 ~ stratio , data = df , vcov = 'hetero' )
+reg1 <- feols( log(points) ~ bouts, data = df , vcov = 'hetero')
 
-# reg2: NO controls, use piecewise linear spline(P.L.S) with a knot at 18
-reg2 <- feols( score4 ~ lspline( stratio , 18 ) , data = df , vcov = 'hetero' )
+# reg2: NO controls, (P.L.S) with a knot at 25
+reg2 <- feols( log(points) ~ lspline(bouts, 25), data = df , vcov = 'hetero')
 
-# reg3: control for english learners dummy (english_d) only. 
-#   Is your parameter different? Is it a confounder?
-df <- df %>% mutate( english_d = 1*(english>1))
-reg3 <- feols( score4 ~ lspline( stratio , 18 ) + english_d, data = df , vcov = 'hetero' )
+# reg3: control for alias dummy (alias) only 
+reg3 <- feols( log(points) ~ lspline(bouts, 25) + alias,
+               data = df , vcov = 'hetero' )
 
 ##
-# reg4: reg3 + Schools' special students measures (lunch with P.L.S, knot: 15; and special)
-reg4 <- feols( score4 ~ lspline( stratio , 18 ) + english_d 
-                   + lspline(lunch,15) + special , data = df , vcov = 'hetero' )
+# reg4: reg3 + win with knots at 20 and 50 + height/mean height per division ratio)
+reg4 <- feols( log(points) ~ lspline(bouts, 25) + alias +
+               lspline(win, c(20,50)) +
+                   + height2mean_height_r , data = df , vcov = 'hetero' )
 
 #
-# reg5: reg4 + salary with P.L.S, knots at 35 and 40, exptot, log of income and scratio
-reg5 <- feols( score4 ~ lspline( stratio , 18 ) + english_d
-                   + lspline(lunch,15) + special 
-                   + lspline(salary,c(35,40)) + exptot 
-                   + log( income ) + scratio , data = df , vcov = 'hetero' )
+# reg5: reg4 + age + start + lose + starting age
+reg5 <- feols( log(points) ~  alias 
+               + height2mean_height_r 
+               + lspline(bouts, 25) 
+               + lspline(age, c(27, 31))
+               + starting_age
+               + lose
+               + lspline(start, 2015)
+               , data = df , vcov = 'hetero' )
 
 # Naming the coefficients for pretty output
 alpha  <- round( reg5$coeftable[1,1] , 2 )
